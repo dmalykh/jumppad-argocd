@@ -14,18 +14,17 @@ variable "repo_url" {
 variable "repo_username" {
   default     = ""
   description = <<-EOF
-    Username for HTTPS auth against repo_url. Convention varies by host:
-    GitHub accepts any placeholder (e.g. "x-access-token") alongside a PAT;
-    GitLab expects "oauth2"; Gitea typically wants your real username.
+    Username for HTTPS auth against repo_url. Leave empty for a public
+    repo -- no credentials are created and ArgoCD syncs anonymously.
+    Convention for private repos varies by host: GitHub accepts any
+    placeholder (e.g. "x-access-token") alongside a PAT; GitLab expects
+    "oauth2"; Gitea typically wants your real username.
   EOF
 }
 
 variable "repo_token" {
   default     = ""
-  description = <<-EOF
-    PAT/token paired with repo_username. No real value defaults here --
-    every caller supplies its own, from its own *.vars file or --var.
-  EOF
+  description = "PAT/token paired with repo_username. Leave empty along with repo_username for a public repo."
 }
 
 variable "app_namespace" {

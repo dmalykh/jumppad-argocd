@@ -9,5 +9,7 @@ type: Opaque
 stringData:
   type: git
   url: {{repo_url}}
+{{#if repo_username}}
   username: {{repo_username}}
   password: {{repo_token}}
+{{/if}}

@@ -31,24 +31,84 @@ it's not GitHub-specific.
 
 ## Usage
 
+All examples assume:
+
 ```hcl
 resource "k8s_cluster" "dev" {
   network {
     id = resource.network.dev.meta.id
   }
 }
+```
 
+Pin `?ref=` to a tagged release. Untagged, it tracks the default branch.
+
+### GitHub, private repo + GHCR images (PAT for both)
+
+One fine-grained PAT (Contents: Read-only on the repo, Packages: Read-only
+for GHCR) covers both the repo credential and the image-pull secret --
+`registry_password` falls back to `repo_token` when left unset.
+
+```hcl
 module "argocd" {
   source = "github.com/dmalykh/jumppad-argocd?ref=v1.0.0"
 
   variables = {
-    k8s_cluster    = resource.k8s_cluster.dev
-    repo_url       = "https://github.com/myorg/infra-manifest.git"
-    repo_username  = "x-access-token" # GitHub: any placeholder. GitLab: "oauth2". Gitea: your username.
-    repo_token     = variable.repo_token
-    app_namespace  = "myapp"
-    argocd_project = "myapp"
-    app_path       = "environments/dev/apps"
+    k8s_cluster       = resource.k8s_cluster.dev
+    repo_url          = "https://github.com/myorg/infra-manifest.git"
+    repo_username     = "x-access-token" # GitHub accepts any placeholder alongside a PAT
+    repo_token        = variable.repo_token
+    registry_username = "my-github-username" # GHCR wants the real account, not a placeholder
+    app_namespace     = "myapp"
+    argocd_project    = "myapp"
+    app_path          = "environments/dev/apps"
+  }
+}
+```
+
+### GitHub, public repo, no PAT
+
+Leave `repo_username`/`repo_token` unset and no repository credential is
+created -- ArgoCD syncs anonymously. Turn off the registry secret too if
+your images are public.
+
+```hcl
+module "argocd" {
+  source = "github.com/dmalykh/jumppad-argocd?ref=v1.0.0"
+
+  variables = {
+    k8s_cluster            = resource.k8s_cluster.dev
+    repo_url               = "https://github.com/myorg/public-manifests.git"
+    create_registry_secret = "false"
+    app_namespace          = "myapp"
+    argocd_project         = "myapp"
+    app_path               = "environments/dev/apps"
+  }
+}
+```
+
+### Another provider (e.g. GitLab), separate registry credentials
+
+`repo_username` conventions vary by host (GitLab: `"oauth2"`; Gitea:
+typically your real username). `registry_*` is independent of `repo_*`,
+so a token scoped only to the repo still works even against a different
+registry.
+
+```hcl
+module "argocd" {
+  source = "github.com/dmalykh/jumppad-argocd?ref=v1.0.0"
+
+  variables = {
+    k8s_cluster       = resource.k8s_cluster.dev
+    repo_url          = "https://gitlab.com/myorg/infra-manifest.git"
+    repo_username     = "oauth2"
+    repo_token        = variable.gitlab_token
+    registry_server   = "registry.gitlab.com"
+    registry_username = "myorg"
+    registry_password = variable.registry_token
+    app_namespace     = "myapp"
+    argocd_project    = "myapp"
+    app_path          = "environments/dev/apps"
   }
 }
 ```
@@ -58,8 +118,6 @@ Then:
 ```
 jumppad up
 ```
-
-Pin `?ref=` to a tagged release. Untagged, it tracks the default branch.
 
 ## Variables
 
