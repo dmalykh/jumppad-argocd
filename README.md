@@ -5,16 +5,20 @@ Jumppad-managed Kubernetes cluster and bootstraps a GitOps sync from a
 remote git repository, using the [app-of-apps](https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/)
 pattern.
 
-Point it at a repo, give it a token, and `jumppad up` gets you a local
-cluster running ArgoCD, synced to that repo, with your app's images pulling
-from GHCR.
+Point it at a repo and `jumppad up` gets you a local cluster running
+ArgoCD, synced to that repo. Both credentials are optional: skip
+`repo_token` for a public repo, skip `create_registry_secret` for public
+images.
 
 ## What it does
 
 - Installs ArgoCD (a vendored, version-pinned install manifest, applied
   server-side)
-- Registers your git repo as an ArgoCD repository credential (HTTPS + token)
-- Optionally creates an image-pull secret for a private container registry
+- Registers your git repo as an ArgoCD repository credential (HTTPS),
+  with credentials only if you supply `repo_token` -- public repos sync
+  with none
+- Optionally creates an image-pull secret for a private container
+  registry, off by default
 - Creates an `AppProject` and a root `Application` (app-of-apps)
 - Waits for the `Application` to report `Synced` / `Healthy`
 - Waits for the resulting Deployments to roll out
@@ -26,8 +30,9 @@ it's not GitHub-specific.
 
 - [Jumppad](https://jumppad.dev) >= 0.28
 - A `k8s_cluster` resource in your blueprint
-- A token with read access to the target repo (and to your image registry,
-  if `create_registry_secret` is enabled)
+- For a private repo: a token with read access to it
+- For private images: a token with read access to your registry (can be
+  the same token, if it's scoped for both)
 
 ## Usage
 
@@ -45,32 +50,11 @@ Pin `?ref=` to a tagged release. Untagged, it tracks the default branch.
 
 ### GitHub, private repo + GHCR images (PAT for both)
 
-One fine-grained PAT (Contents: Read-only on the repo, Packages: Read-only
-for GHCR) covers both the repo credential and the image-pull secret --
-`registry_password` falls back to `repo_token` when left unset.
-
-```hcl
-module "argocd" {
-  source = "github.com/dmalykh/jumppad-argocd?ref=v1.0.0"
-
-  variables = {
-    k8s_cluster       = resource.k8s_cluster.dev
-    repo_url          = "https://github.com/myorg/infra-manifest.git"
-    repo_username     = "x-access-token" # GitHub accepts any placeholder alongside a PAT
-    repo_token        = variable.repo_token
-    registry_username = "my-github-username" # GHCR wants the real account, not a placeholder
-    app_namespace     = "myapp"
-    argocd_project    = "myapp"
-    app_path          = "environments/dev/apps"
-  }
-}
-```
-
-### GitHub, public repo, no PAT
-
-Leave `repo_username`/`repo_token` unset and no repository credential is
-created -- ArgoCD syncs anonymously. Turn off the registry secret too if
-your images are public.
+`repo_username` already defaults to `"x-access-token"`, GitHub's own
+placeholder, so it's omitted below. One fine-grained PAT (Contents:
+Read-only on the repo, Packages: Read-only for GHCR) covers both the repo
+credential and the image-pull secret -- `registry_password` falls back to
+`repo_token` when left unset.
 
 ```hcl
 module "argocd" {
@@ -78,11 +62,33 @@ module "argocd" {
 
   variables = {
     k8s_cluster            = resource.k8s_cluster.dev
-    repo_url               = "https://github.com/myorg/public-manifests.git"
-    create_registry_secret = "false"
+    repo_url               = "https://github.com/myorg/infra-manifest.git"
+    repo_token             = variable.repo_token
+    create_registry_secret = "true"
+    registry_username      = "my-github-username" # GHCR wants the real account, not a placeholder
     app_namespace          = "myapp"
     argocd_project         = "myapp"
     app_path               = "environments/dev/apps"
+  }
+}
+```
+
+### GitHub, public repo, no PAT
+
+Leave `repo_token` unset (default `""`) and no repository credential is
+created -- ArgoCD syncs anonymously. `create_registry_secret` is already
+`"false"` by default, so this is the minimal call.
+
+```hcl
+module "argocd" {
+  source = "github.com/dmalykh/jumppad-argocd?ref=v1.0.0"
+
+  variables = {
+    k8s_cluster    = resource.k8s_cluster.dev
+    repo_url       = "https://github.com/myorg/public-manifests.git"
+    app_namespace  = "myapp"
+    argocd_project = "myapp"
+    app_path       = "environments/dev/apps"
   }
 }
 ```
@@ -99,16 +105,17 @@ module "argocd" {
   source = "github.com/dmalykh/jumppad-argocd?ref=v1.0.0"
 
   variables = {
-    k8s_cluster       = resource.k8s_cluster.dev
-    repo_url          = "https://gitlab.com/myorg/infra-manifest.git"
-    repo_username     = "oauth2"
-    repo_token        = variable.gitlab_token
-    registry_server   = "registry.gitlab.com"
-    registry_username = "myorg"
-    registry_password = variable.registry_token
-    app_namespace     = "myapp"
-    argocd_project    = "myapp"
-    app_path          = "environments/dev/apps"
+    k8s_cluster            = resource.k8s_cluster.dev
+    repo_url               = "https://gitlab.com/myorg/infra-manifest.git"
+    repo_username          = "oauth2"
+    repo_token             = variable.gitlab_token
+    create_registry_secret = "true"
+    registry_server        = "registry.gitlab.com"
+    registry_username      = "myorg"
+    registry_password      = variable.registry_token
+    app_namespace          = "myapp"
+    argocd_project         = "myapp"
+    app_path               = "environments/dev/apps"
   }
 }
 ```
@@ -121,27 +128,32 @@ jumppad up
 
 ## Variables
 
-| Name | Default | Description |
-|---|---|---|
-| `k8s_cluster` | *(required)* | The `k8s_cluster` resource to install ArgoCD into. Pass `resource.k8s_cluster.<name>`. |
-| `repo_url` | *(required)* | HTTPS clone URL of the repo ArgoCD syncs from. Any git host. |
-| `repo_username` | *(required)* | Username for HTTPS auth against `repo_url` (convention varies by host -- see Usage above). |
-| `repo_token` | *(required)* | PAT/token paired with `repo_username`. |
-| `app_namespace` | *(required)* | Kubernetes namespace the app-of-apps deploys into. |
-| `argocd_project` | *(required)* | ArgoCD `AppProject` name. |
-| `app_path` | *(required)* | Path within the repo the root `Application` points at. |
-| `argocd_version` | `v3.5.1` | Pinned ArgoCD version. See "Bumping the ArgoCD version" below. |
-| `extra_source_repos` | `[]` | Additional repos to whitelist in the `AppProject`'s `sourceRepos`, beyond `repo_url` itself (e.g. a Helm repo). |
-| `create_registry_secret` | `"true"` | Set `"false"` to skip the image-pull secret entirely. |
-| `registry_secret_name` | `"ghcr-pull-secret"` | Name of the created secret. Must match `imagePullSecrets` in your manifests. |
-| `registry_server` | `"ghcr.io"` | Container registry host. |
-| `registry_username` | *(required if `create_registry_secret`)* | Registry username. |
-| `registry_password` | *(falls back to `repo_token`)* | Registry password/token. Leave empty to reuse `repo_token`. |
+| Name | Default | What it's for | Required? |
+|---|---|---|---|
+| `k8s_cluster` | *(none)* | The cluster to install ArgoCD into. Pass `resource.k8s_cluster.<name>` from your own blueprint. | Always |
+| `repo_url` | *(none)* | HTTPS clone URL of the repo ArgoCD syncs from -- copy it from your host's "Clone with HTTPS" button. Any git host. | Always |
+| `repo_username` | `"x-access-token"` | Username for HTTPS git auth. Default works for GitHub/GitLab as-is; override for Gitea or a host that validates it. No effect if `repo_token` is empty. | No |
+| `repo_token` | *(none)* | PAT with read access to `repo_url`. Get it from GitHub (Settings > Developer settings > Fine-grained tokens), GitLab (Settings > Access Tokens), or Gitea (Settings > Applications). Leave empty for a public repo -- no credential secret is created. | No -- required only for private repos |
+| `app_namespace` | *(none)* | Kubernetes namespace your app deploys into (created automatically). Not ArgoCD's own namespace, which is always `argocd`. | Always |
+| `argocd_project` | *(none)* | Name for the ArgoCD `AppProject` this module creates -- e.g. your app or org name. | Always |
+| `app_path` | *(none)* | Path inside `repo_url` the root `Application` syncs, e.g. `"environments/dev/apps"`. | Always |
+| `argocd_version` | `"v3.5.1"` | ArgoCD release to install -- must match a vendored manifest. See "Bumping the ArgoCD version" below. | No |
+| `extra_source_repos` | `[]` | Extra repo URLs to whitelist in the `AppProject`'s `sourceRepos`, beyond `repo_url` (e.g. a Helm chart repo). | No |
+| `create_registry_secret` | `"false"` | Set `"true"` to create an image-pull secret for a private container registry. | No |
+| `registry_secret_name` | `"ghcr-pull-secret"` | Name of the created secret. Must exactly match `imagePullSecrets` in your Deployment manifests. | No |
+| `registry_server` | `"ghcr.io"` | Registry hostname images are pulled from. | No |
+| `registry_username` | *(none)* | Registry username. Unlike `repo_username`, most registries validate this against the real account. | Only if `create_registry_secret = "true"` |
+| `registry_password` | *(none)* | Registry password/token. Leave empty to reuse `repo_token`, when one PAT covers both repo and registry read access. | No |
 
-Jumppad requires every `variable` block to declare a `default`, so the
-"required" ones above default to `""` and are enforced at runtime instead
-(`: "${VAR:?}"` guards in the module's shell scripts) rather than at parse
-time.
+`k8s_cluster`, `repo_url`, `app_namespace`, `argocd_project`, and
+`app_path` have no real default -- Jumppad requires every `variable`
+block to declare one, so they default to `""`. `app_namespace` and
+`argocd_project` are checked at runtime (`: "${VAR:?}"` guards in
+`scripts/argocd-bootstrap.sh`) and fail with a clear error if left
+unset. `k8s_cluster`, `repo_url`, and `app_path` aren't guarded the same
+way -- leaving one unset produces a broken cluster or malformed
+manifest instead of an explicit error, so treat all five as required in
+practice.
 
 ## Outputs
 

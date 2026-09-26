@@ -3,80 +3,133 @@
 
 variable "k8s_cluster" {
   default     = ""
-  description = "The k8s_cluster resource to install ArgoCD into and sync onto. Pass `resource.k8s_cluster.<name>`."
+  description = <<-EOF
+    The cluster ArgoCD installs into. Required -- this module never
+    creates its own cluster. Pass the k8s_cluster resource from your own
+    blueprint: `resource.k8s_cluster.<name>`.
+  EOF
 }
 
 variable "repo_url" {
   default     = ""
-  description = "HTTPS clone URL of the repo ArgoCD syncs from, e.g. \"https://github.com/org/repo.git\", \"https://gitlab.com/org/repo.git\", or a self-hosted Gitea URL."
+  description = <<-EOF
+    Required. HTTPS clone URL of the repo ArgoCD syncs from (your
+    GitOps/manifests repo) -- copy it straight from your host's "Clone
+    with HTTPS" button, e.g. "https://github.com/org/repo.git",
+    "https://gitlab.com/org/repo.git", or a self-hosted Gitea URL.
+  EOF
 }
 
 variable "repo_username" {
-  default     = ""
+  default     = "x-access-token"
   description = <<-EOF
-    Username for HTTPS auth against repo_url. Leave empty for a public
-    repo -- no credentials are created and ArgoCD syncs anonymously.
-    Convention for private repos varies by host: GitHub accepts any
-    placeholder (e.g. "x-access-token") alongside a PAT; GitLab expects
-    "oauth2"; Gitea typically wants your real username.
+    Username paired with repo_token for HTTPS git auth. The default
+    works as-is for GitHub and GitLab, which both accept a placeholder
+    alongside a real token. Override to your actual account username
+    for Gitea or any host that validates it. Has no effect if repo_token
+    is empty (public repo -- no credential is created at all).
   EOF
 }
 
 variable "repo_token" {
   default     = ""
-  description = "PAT/token paired with repo_username. Leave empty along with repo_username for a public repo."
+  description = <<-EOF
+    Personal access token (PAT) with read access to repo_url. Leave
+    empty for a public repo: no credential secret is created and ArgoCD
+    syncs anonymously. Where to get one: GitHub -> Settings > Developer
+    settings > Fine-grained tokens (Contents: Read-only, scoped to this
+    repo); GitLab -> Settings > Access Tokens (read_repository scope);
+    Gitea -> Settings > Applications. Never commit a real value here --
+    pass it via `jumppad up --var repo_token=...` or a *.vars file.
+  EOF
 }
 
 variable "app_namespace" {
   default     = ""
-  description = "Kubernetes namespace the app-of-apps deploys into. Not assumed to equal repo_username/org."
+  description = <<-EOF
+    Required. Kubernetes namespace your app deploys into -- created
+    automatically by this module. Not the same as ArgoCD's own
+    namespace, which is always "argocd".
+  EOF
 }
 
 variable "argocd_project" {
   default     = ""
-  description = "ArgoCD AppProject name -- matches repo_url's projects/<name>.yaml."
+  description = <<-EOF
+    Required. Name for the ArgoCD AppProject this module creates --
+    pick anything descriptive, e.g. your app or org name. If repo_url
+    keeps per-project config (like projects/<name>.yaml), this must
+    match that name.
+  EOF
 }
 
 variable "app_path" {
   default     = ""
-  description = "Path within the repo the root Application points at, e.g. \"environments/dev/apps\"."
+  description = <<-EOF
+    Required. Path inside repo_url that the root Application points its
+    sync at, e.g. "environments/dev/apps" -- everything under this
+    directory in the repo gets applied to app_namespace.
+  EOF
 }
 
 variable "argocd_version" {
   default     = "v3.5.1"
-  description = "Pinned ArgoCD version. Shared default -- override per caller only if a project genuinely needs to diverge."
+  description = <<-EOF
+    ArgoCD release to install. Must match a vendored
+    manifests/argocd-install-<version>.yaml in this module -- see
+    "Bumping the ArgoCD version" in README before changing.
+  EOF
 }
 
 variable "extra_source_repos" {
   default     = []
   description = <<-EOF
-    Additional repos to whitelist in the AppProject's sourceRepos, beyond
-    repo_url itself -- e.g. a Helm repo (["https://helm.manticoresearch.com/"]).
-    Most callers leave this empty.
+    Extra repo URLs to whitelist in the AppProject's sourceRepos,
+    beyond repo_url itself -- e.g. a Helm chart repo one of your
+    Applications pulls from (["https://helm.manticoresearch.com/"]).
+    Most callers leave this empty; it doesn't get any credentials of
+    its own.
   EOF
 }
 
 variable "create_registry_secret" {
-  default     = "true"
-  description = "Set \"false\" to skip creating an image-pull secret entirely (e.g. public images, or one already provisioned another way)."
+  default     = "false"
+  description = <<-EOF
+    Set "true" to create an image-pull secret for a private container
+    registry. Off by default -- turn it on only if your app's images
+    aren't public. When "true", registry_username is also required.
+  EOF
 }
 
 variable "registry_secret_name" {
   default     = "ghcr-pull-secret"
-  description = "Name of the created image-pull secret. Must match imagePullSecrets in the repo's manifests."
+  description = <<-EOF
+    Name of the created image-pull secret. Must exactly match the
+    imagePullSecrets name referenced in your Deployment manifests, or
+    pods will sit in ImagePullBackOff unable to find it.
+  EOF
 }
 
 variable "registry_server" {
   default     = "ghcr.io"
-  description = "Container registry host for the image-pull secret."
+  description = "Registry hostname your images are pulled from, e.g. \"ghcr.io\", \"registry.gitlab.com\", or a private registry's host."
 }
 
 variable "registry_username" {
   default     = ""
-  description = "Registry username. Required unless create_registry_secret is \"false\"."
+  description = <<-EOF
+    Registry username. Required when create_registry_secret is "true".
+    Unlike repo_username, most registries (ghcr.io included) validate
+    this against the real account that owns the token -- a placeholder
+    won't authenticate here.
+  EOF
 }
 
 variable "registry_password" {
   default     = ""
-  description = "Registry password/token. Falls back to repo_token if left empty (common when one PAT covers both git and registry access)."
+  description = <<-EOF
+    Registry password/token. Leave empty to reuse repo_token -- works
+    when one PAT is scoped for both repo read and package/registry read
+    access (e.g. a GitHub PAT with Contents:Read-only + Packages:Read-only).
+  EOF
 }
