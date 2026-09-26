@@ -6,7 +6,7 @@ metadata:
 spec:
   description: {{argocd_project}} platform stack
   sourceRepos:
-    - https://github.com/{{github_org}}/{{infra_repo}}.git
+    - {{repo_url}}
 {{extra_source_repos_yaml}}
   destinations:
     - namespace: {{app_namespace}}
@@ -33,7 +33,7 @@ spec:
     namespace: argocd
     server: https://kubernetes.default.svc
   source:
-    repoURL: https://github.com/{{github_org}}/{{infra_repo}}.git
+    repoURL: {{repo_url}}
     targetRevision: HEAD
     path: {{app_path}}
   syncPolicy:

@@ -1,30 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ghcr-pull-secret + sync-wait + rollout-wait -- see README "Design notes".
+# registry-secret + sync-wait + rollout-wait -- see README "Design notes".
 #
-# Required env: GITHUB_TOKEN, APP_NAMESPACE, ARGOCD_PROJECT, KUBECONFIG
+# Required env: APP_NAMESPACE, ARGOCD_PROJECT, KUBECONFIG, CREATE_REGISTRY_SECRET
 
-: "${GITHUB_TOKEN:?}" "${APP_NAMESPACE:?}" "${ARGOCD_PROJECT:?}" "${KUBECONFIG:?}"
+: "${APP_NAMESPACE:?}" "${ARGOCD_PROJECT:?}" "${KUBECONFIG:?}" "${CREATE_REGISTRY_SECRET:?}"
 
 log() { printf '%s\n' "$*"; }
 
-# GHCR needs the real username, unlike git-over-HTTPS's x-access-token placeholder.
-github_username() {
-  curl -fsS -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user \
-    | grep -o '"login": *"[^"]*"' | head -1 | sed -E 's/.*"login": *"([^"]*)".*/\1/'
-}
-
 # Builds the base64 auth field correctly; no base64 function in HCL/templates.
-create_ghcr_secret() {
-  local gh_user
-  gh_user="$(github_username)"
-  [[ -n "$gh_user" ]] || { log "Could not derive a GitHub username from GITHUB_TOKEN."; return 1; }
+create_registry_secret() {
+  [[ "$CREATE_REGISTRY_SECRET" == "true" ]] || { log "create_registry_secret=false, skipping."; return 0; }
+  : "${REGISTRY_SECRET_NAME:?}" "${REGISTRY_SERVER:?}" "${REGISTRY_USERNAME:?}"
 
-  kubectl -n "$APP_NAMESPACE" create secret docker-registry ghcr-pull-secret \
-    --docker-server=ghcr.io \
-    --docker-username="$gh_user" \
-    --docker-password="$GITHUB_TOKEN" \
+  local password="${REGISTRY_PASSWORD:-${REPO_TOKEN:-}}"
+  [[ -n "$password" ]] || { log "Set registry_password or repo_token for the registry secret."; return 1; }
+
+  kubectl -n "$APP_NAMESPACE" create secret docker-registry "$REGISTRY_SECRET_NAME" \
+    --docker-server="$REGISTRY_SERVER" \
+    --docker-username="$REGISTRY_USERNAME" \
+    --docker-password="$password" \
     --dry-run=client -o yaml | kubectl apply -f -
 }
 
@@ -85,8 +81,8 @@ wait_for_rollout() {
   done < <(kubectl -n "$APP_NAMESPACE" get deploy -o name 2>/dev/null)
 }
 
-log "Configuring GHCR pull credentials…"
-create_ghcr_secret
+log "Configuring registry pull credentials…"
+create_registry_secret
 log "Waiting for the app to sync…"
 wait_for_sync
 log "Waiting for workloads to roll out…"

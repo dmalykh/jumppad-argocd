@@ -48,9 +48,9 @@ resource "template" "repo_secret" {
   destination = ".generated/repo-secret.yaml"
 
   variables = {
-    github_org   = variable.github_org
-    infra_repo   = variable.infra_repo
-    github_token = variable.github_token
+    repo_url      = variable.repo_url
+    repo_username = variable.repo_username
+    repo_token    = variable.repo_token
   }
 }
 
@@ -69,8 +69,7 @@ resource "template" "appproject_application" {
 
   variables = {
     argocd_project = variable.argocd_project
-    github_org     = variable.github_org
-    infra_repo     = variable.infra_repo
+    repo_url       = variable.repo_url
     app_namespace  = variable.app_namespace
     app_path       = variable.app_path
 
@@ -95,10 +94,15 @@ resource "exec" "argocd_bootstrap" {
   script = file("scripts/argocd-bootstrap.sh")
 
   environment = {
-    KUBECONFIG     = variable.k8s_cluster.kube_config.path
-    GITHUB_TOKEN   = variable.github_token
-    APP_NAMESPACE  = variable.app_namespace
-    ARGOCD_PROJECT = variable.argocd_project
+    KUBECONFIG             = variable.k8s_cluster.kube_config.path
+    APP_NAMESPACE          = variable.app_namespace
+    ARGOCD_PROJECT         = variable.argocd_project
+    REPO_TOKEN             = variable.repo_token
+    CREATE_REGISTRY_SECRET = variable.create_registry_secret
+    REGISTRY_SECRET_NAME   = variable.registry_secret_name
+    REGISTRY_SERVER        = variable.registry_server
+    REGISTRY_USERNAME      = variable.registry_username
+    REGISTRY_PASSWORD      = variable.registry_password
   }
 
   timeout = "1800s"

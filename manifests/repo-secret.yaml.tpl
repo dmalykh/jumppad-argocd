@@ -8,6 +8,6 @@ metadata:
 type: Opaque
 stringData:
   type: git
-  url: https://github.com/{{github_org}}/{{infra_repo}}.git
-  username: x-access-token
-  password: {{github_token}}
+  url: {{repo_url}}
+  username: {{repo_username}}
+  password: {{repo_token}}
