@@ -16,6 +16,7 @@ spec:
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
+{{extra_cluster_resources_yaml}}
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"

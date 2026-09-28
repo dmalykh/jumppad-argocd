@@ -75,7 +75,11 @@ resource "template" "appproject_application" {
     target_revision = variable.target_revision
 
     # Built as a string, not a list -- a list value here breaks substitution.
-    extra_source_repos_yaml = join("\n", formatlist("    - %s", variable.extra_source_repos))
+    extra_source_repos_yaml      = join("\n", formatlist("    - %s", variable.extra_source_repos))
+    # Built as a string, not a list -- rendered as extra clusterResourceWhitelist
+    # entries when a caller's Applications need cluster-scoped RBAC (e.g. a Helm
+    # chart with its own ServiceAccount + ClusterRole).
+    extra_cluster_resources_yaml = variable.extra_cluster_resources ? "    - group: \"rbac.authorization.k8s.io\"\n      kind: ClusterRole\n    - group: \"rbac.authorization.k8s.io\"\n      kind: ClusterRoleBinding" : ""
   }
 }
 
