@@ -92,6 +92,18 @@ variable "extra_source_repos" {
   EOF
 }
 
+variable "extra_cluster_resources" {
+  default     = false
+  description = <<-EOF
+    Set true to also whitelist ClusterRole and ClusterRoleBinding in the
+    AppProject's clusterResourceWhitelist, alongside the always-included
+    Namespace. Needed only if one of your Applications installs a Helm
+    chart that creates its own cluster-scoped RBAC (a ServiceAccount with a
+    ClusterRole + ClusterRoleBinding for API access) -- most GitOps repos
+    need only Namespace and should leave this false.
+  EOF
+}
+
 variable "create_registry_secret" {
   default     = "false"
   description = <<-EOF
