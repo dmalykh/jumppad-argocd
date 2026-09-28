@@ -68,10 +68,11 @@ resource "template" "appproject_application" {
   destination = ".generated/appproject-application.yaml"
 
   variables = {
-    argocd_project = variable.argocd_project
-    repo_url       = variable.repo_url
-    app_namespace  = variable.app_namespace
-    app_path       = variable.app_path
+    argocd_project  = variable.argocd_project
+    repo_url        = variable.repo_url
+    app_namespace   = variable.app_namespace
+    app_path        = variable.app_path
+    target_revision = variable.target_revision
 
     # Built as a string, not a list -- a list value here breaks substitution.
     extra_source_repos_yaml = join("\n", formatlist("    - %s", variable.extra_source_repos))

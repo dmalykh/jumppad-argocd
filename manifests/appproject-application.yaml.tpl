@@ -34,7 +34,7 @@ spec:
     server: https://kubernetes.default.svc
   source:
     repoURL: {{repo_url}}
-    targetRevision: HEAD
+    targetRevision: {{target_revision}}
     path: {{app_path}}
   syncPolicy:
     automated:

@@ -133,3 +133,13 @@ variable "registry_password" {
     access (e.g. a GitHub PAT with Contents:Read-only + Packages:Read-only).
   EOF
 }
+
+variable "target_revision" {
+  default     = "HEAD"
+  description = <<-EOF
+    Git revision the root Application syncs -- "HEAD" for the repo's
+    default branch, or a branch name, tag or commit SHA. Point it at a
+    branch to try an unmerged manifests change against a local cluster
+    before landing it.
+  EOF
+}
