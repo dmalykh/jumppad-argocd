@@ -79,7 +79,13 @@ resource "template" "appproject_application" {
     # Built as a string, not a list -- rendered as extra clusterResourceWhitelist
     # entries when a caller's Applications need cluster-scoped RBAC (e.g. a Helm
     # chart with its own ServiceAccount + ClusterRole).
-    extra_cluster_resources_yaml = variable.extra_cluster_resources ? "    - group: \"rbac.authorization.k8s.io\"\n      kind: ClusterRole\n    - group: \"rbac.authorization.k8s.io\"\n      kind: ClusterRoleBinding" : ""
+    # No quotes around the group value: jumppad's template substitution
+    # HTML-escapes literal " characters (renders &quot;), which breaks the
+    # YAML parse. rbac.authorization.k8s.io is a bare YAML scalar anyway --
+    # no quoting needed -- confirmed against a live cluster after the
+    # quoted form failed with "yaml: line 19: did not find expected
+    # alphabetic or numeric character".
+    extra_cluster_resources_yaml = variable.extra_cluster_resources ? "    - group: rbac.authorization.k8s.io\n      kind: ClusterRole\n    - group: rbac.authorization.k8s.io\n      kind: ClusterRoleBinding" : ""
   }
 }
 
