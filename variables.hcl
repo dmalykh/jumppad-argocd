@@ -155,3 +155,36 @@ variable "target_revision" {
     before landing it.
   EOF
 }
+
+variable "disable_dex" {
+  default     = "true"
+  description = <<-EOF
+    Set "false" to run argocd-dex-server. Dex serves SSO/OIDC login
+    providers only -- ArgoCD's built-in local admin account works without
+    it. Disabled by default: a local dev cluster logs in as admin, so dex
+    costs a pod and its own image pull (ghcr.io/dexidp/dex) for nothing.
+    Set "false" if your blueprint configures an OIDC connector.
+  EOF
+}
+
+variable "disable_notifications" {
+  default     = "true"
+  description = <<-EOF
+    Set "false" to run argocd-notifications-controller. The controller is
+    inert unless triggers and templates are configured in
+    argocd-notifications-cm / argocd-notifications-secret, which this
+    module never creates. Disabled by default -- set "false" only if your
+    GitOps repo supplies that config and you want delivery to fire.
+  EOF
+}
+
+variable "disable_applicationset" {
+  default     = "true"
+  description = <<-EOF
+    Set "false" to run argocd-applicationset-controller. It reconciles
+    ApplicationSet resources; a plain AppProject + Application needs
+    nothing from it. Disabled by default -- set "false" if the manifests
+    under app_path create ApplicationSets. The applicationsets CRD is
+    installed either way.
+  EOF
+}

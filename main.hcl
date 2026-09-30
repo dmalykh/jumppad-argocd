@@ -28,6 +28,19 @@ resource "exec" "install_argocd" {
     set -euo pipefail
     : "$${ARGOCD_MANIFEST:?}" "$${KUBECONFIG:?}"
     kubectl apply --server-side --force-conflicts -n argocd -f "$ARGOCD_MANIFEST"
+
+    # Scaled, not deleted -- inert Service/RBAC survives an argocd_version bump.
+    # Both directions: the manifest declares no spec.replicas, so apply never
+    # restores one and re-enabling has to scale up here.
+    scale_optional() {
+      local replicas=1
+      [[ "$2" == "true" ]] && replicas=0
+      kubectl -n argocd scale "deploy/$1" --replicas="$replicas"
+    }
+    scale_optional argocd-dex-server                "$${DISABLE_DEX:-true}"
+    scale_optional argocd-notifications-controller  "$${DISABLE_NOTIFICATIONS:-true}"
+    scale_optional argocd-applicationset-controller "$${DISABLE_APPLICATIONSET:-true}"
+
     kubectl -n argocd rollout status deploy/argocd-server --timeout=300s
     kubectl -n argocd rollout status deploy/argocd-repo-server --timeout=300s
     kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=300s
@@ -36,6 +49,10 @@ resource "exec" "install_argocd" {
   environment = {
     KUBECONFIG      = variable.k8s_cluster.kube_config.path
     ARGOCD_MANIFEST = resource.template.argocd_install_manifest.destination
+
+    DISABLE_DEX            = variable.disable_dex
+    DISABLE_NOTIFICATIONS  = variable.disable_notifications
+    DISABLE_APPLICATIONSET = variable.disable_applicationset
   }
 
   timeout = "1800s" # cold-cache install can take ~16min

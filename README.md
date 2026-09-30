@@ -138,6 +138,9 @@ jumppad up
 | `argocd_project` | *(none)* | Name for the ArgoCD `AppProject` this module creates -- e.g. your app or org name. | Always |
 | `app_path` | *(none)* | Path inside `repo_url` the root `Application` syncs, e.g. `"environments/dev/apps"`. | Always |
 | `argocd_version` | `"v3.5.1"` | ArgoCD release to install -- must match a vendored manifest. See "Bumping the ArgoCD version" below. | No |
+| `disable_dex` | `"true"` | Set `"false"` to run `argocd-dex-server` (SSO/OIDC logins). Off by default -- ArgoCD's built-in `admin` account needs no dex. | No |
+| `disable_notifications` | `"true"` | Set `"false"` to run `argocd-notifications-controller`. Off by default -- it does nothing without notification triggers, which this module never configures. | No |
+| `disable_applicationset` | `"true"` | Set `"false"` to run `argocd-applicationset-controller`. Off by default -- needed only if your manifests create `ApplicationSet` resources. | No |
 | `extra_source_repos` | `[]` | Extra repo URLs to whitelist in the `AppProject`'s `sourceRepos`, beyond `repo_url` (e.g. a Helm chart repo). | No |
 | `create_registry_secret` | `"false"` | Set `"true"` to create an image-pull secret for a private container registry. | No |
 | `registry_secret_name` | `"ghcr-pull-secret"` | Name of the created secret. Must exactly match `imagePullSecrets` in your Deployment manifests. | No |
@@ -154,6 +157,34 @@ unset. `k8s_cluster`, `repo_url`, and `app_path` aren't guarded the same
 way -- leaving one unset produces a broken cluster or malformed
 manifest instead of an explicit error, so treat all five as required in
 practice.
+
+### Optional ArgoCD components
+
+ArgoCD's install manifest brings up seven workloads. Three are disabled by
+default, because a local dev cluster typically uses none of them:
+
+| Flag | Workload | What being disabled costs you |
+|---|---|---|
+| `disable_dex` | `argocd-dex-server` | SSO/OIDC login providers. ArgoCD's built-in local `admin` account is unaffected. |
+| `disable_notifications` | `argocd-notifications-controller` | Notification delivery (Slack, email, webhooks) -- but only if your repo supplies triggers and templates in `argocd-notifications-cm` / `argocd-notifications-secret`. This module never creates them, so by default the controller has nothing to do. |
+| `disable_applicationset` | `argocd-applicationset-controller` | `ApplicationSet` reconciliation. The plain `AppProject` + `Application` this module creates needs none of it. The `applicationsets.argoproj.io` CRD is installed either way. |
+
+The four left running -- `argocd-server`, `argocd-repo-server`,
+`argocd-application-controller`, `argocd-redis` -- are the minimum for
+app-of-apps GitOps against a local cluster.
+
+What this saves: three fewer pods contending for CPU and memory on a laptop
+cluster, which shortens the rollout waits on the critical path, plus one
+image pull. Dex ships its own image (`ghcr.io/dexidp/dex`); the
+notifications and applicationset controllers run the same
+`quay.io/argoproj/argocd` image as `argocd-server`, so skipping those two
+pulls nothing extra.
+
+Re-enabling works on a live cluster, not just a fresh one: the flags scale
+the Deployment in both directions, so setting one to `"false"` and
+re-running `jumppad up` brings the component back. Disabling scales to 0
+rather than deleting -- the Service, ServiceAccount and RBAC stay in place,
+inert, so an `argocd_version` bump doesn't need them re-stitched by hand.
 
 ## Outputs
 
@@ -176,6 +207,12 @@ runtime dependency on `raw.githubusercontent.com`. To bump the version:
 1. `curl -fsS -o manifests/argocd-install-vX.Y.Z.yaml https://raw.githubusercontent.com/argoproj/argo-cd/vX.Y.Z/manifests/install.yaml`
 2. Set `argocd_version`'s default (in `variables.hcl`) or pass it as a caller variable.
 
+If a bump renames or drops one of the Deployments behind `disable_dex`,
+`disable_notifications` or `disable_applicationset`, the `kubectl scale`
+calls in `install_argocd` fail and the install stops. That's deliberate --
+fix the names rather than making those calls non-fatal, or a silently
+skipped component becomes a silently running one.
+
 ## Design notes
 
 Most of this module is declarative (`template` + `k8s_config` resources).
@@ -188,6 +225,9 @@ than a missed shortcut:
   annotation too long` error on the `applicationsets.argoproj.io` CRD (its
   embedded OpenAPI schema exceeds Kubernetes' 262144-byte annotation cap).
   `k8s_config` has no server-side-apply option to work around this.
+  `disable_applicationset` doesn't change this: it scales the controller to
+  0, but the CRD is still applied, so the annotation cap still rules
+  `k8s_config` out.
 - **The registry pull secret** is created via `kubectl create secret
   docker-registry`, which builds the required base64 `auth` field
   correctly. Neither Jumppad's HCL functions nor its `template` resource's
