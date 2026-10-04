@@ -51,10 +51,11 @@ Pin `?ref=` to a tagged release. Untagged, it tracks the default branch.
 ### GitHub, private repo + GHCR images (PAT for both)
 
 `repo_username` already defaults to `"x-access-token"`, GitHub's own
-placeholder, so it's omitted below. One fine-grained PAT (Contents:
-Read-only on the repo, Packages: Read-only for GHCR) covers both the repo
-credential and the image-pull secret -- `registry_password` falls back to
-`repo_token` when left unset.
+placeholder, so it's omitted below. One classic PAT (scopes `repo` +
+`read:packages`) covers both the repo credential and the image-pull secret
+-- `registry_password` falls back to `repo_token` when left unset. It has
+to be classic: fine-grained tokens have no Packages permission, and ghcr.io
+doesn't accept fine-grained tokens regardless.
 
 ```hcl
 module "argocd" {
@@ -146,7 +147,7 @@ jumppad up
 | `registry_secret_name` | `"ghcr-pull-secret"` | Name of the created secret. Must exactly match `imagePullSecrets` in your Deployment manifests. | No |
 | `registry_server` | `"ghcr.io"` | Registry hostname images are pulled from. | No |
 | `registry_username` | *(none)* | Registry username. Unlike `repo_username`, most registries validate this against the real account. | Only if `create_registry_secret = "true"` |
-| `registry_password` | *(none)* | Registry password/token. Leave empty to reuse `repo_token`, when one PAT covers both repo and registry read access. | No |
+| `registry_password` | *(none)* | Registry password/token. Leave empty to reuse `repo_token`, when one PAT covers both repo and registry read access -- for ghcr.io that PAT must be classic, not fine-grained. | No |
 
 `k8s_cluster`, `repo_url`, `app_namespace`, `argocd_project`, and
 `app_path` have no real default -- Jumppad requires every `variable`

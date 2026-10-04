@@ -39,8 +39,11 @@ variable "repo_token" {
     syncs anonymously. Where to get one: GitHub -> Settings > Developer
     settings > Fine-grained tokens (Contents: Read-only, scoped to this
     repo); GitLab -> Settings > Access Tokens (read_repository scope);
-    Gitea -> Settings > Applications. Never commit a real value here --
-    pass it via `jumppad up --var repo_token=...` or a *.vars file.
+    Gitea -> Settings > Applications. If you also want this same token to
+    double as registry_password (see below), it needs to be a classic
+    GitHub token instead -- see registry_password's own note. Never
+    commit a real value here -- pass it via `jumppad up --var
+    repo_token=...` or a *.vars file.
   EOF
 }
 
@@ -142,7 +145,10 @@ variable "registry_password" {
   description = <<-EOF
     Registry password/token. Leave empty to reuse repo_token -- works
     when one PAT is scoped for both repo read and package/registry read
-    access (e.g. a GitHub PAT with Contents:Read-only + Packages:Read-only).
+    access. For ghcr.io specifically, that PAT must be classic (scopes
+    repo + read:packages): fine-grained GitHub tokens have no Packages
+    permission at all, and ghcr.io doesn't accept fine-grained tokens
+    regardless of scope.
   EOF
 }
 
