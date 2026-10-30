@@ -12,8 +12,8 @@ images.
 
 ## What it does
 
-- Installs ArgoCD (a vendored, version-pinned install manifest, applied
-  server-side)
+- Installs ArgoCD (the upstream install manifest for `argocd_version`,
+  applied server-side)
 - Registers your git repo as an ArgoCD repository credential (HTTPS),
   with credentials only if you supply `repo_token` -- public repos sync
   with none
@@ -138,7 +138,8 @@ jumppad up
 | `app_namespace` | *(none)* | Kubernetes namespace your app deploys into (created automatically). Not ArgoCD's own namespace, which is always `argocd`. | Always |
 | `argocd_project` | *(none)* | Name for the ArgoCD `AppProject` this module creates -- e.g. your app or org name. | Always |
 | `app_path` | *(none)* | Path inside `repo_url` the root `Application` syncs, e.g. `"environments/dev/apps"`. | Always |
-| `argocd_version` | `"v3.5.1"` | ArgoCD release to install -- must match a vendored manifest. See "Bumping the ArgoCD version" below. | No |
+| `argocd_version` | `"v3.5.6"` | ArgoCD release to install -- any upstream tag. Its `manifests/install.yaml` is applied from `raw.githubusercontent.com`. See "Changing the ArgoCD version" below. | No |
+| `argocd_manifest_url` | `""` | Apply this install manifest instead of upstream's (e.g. an internal mirror). `""` uses upstream. | No |
 | `disable_dex` | `"true"` | Set `"false"` to run `argocd-dex-server` (SSO/OIDC logins). Off by default -- ArgoCD's built-in `admin` account needs no dex. | No |
 | `disable_notifications` | `"true"` | Set `"false"` to run `argocd-notifications-controller`. Off by default -- it does nothing without notification triggers, which this module never configures. | No |
 | `disable_applicationset` | `"true"` | Set `"false"` to run `argocd-applicationset-controller`. Off by default -- needed only if your manifests create `ApplicationSet` resources. | No |
@@ -199,14 +200,14 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath='{.data.password}' | base64 -d
 ```
 
-## Bumping the ArgoCD version
+## Changing the ArgoCD version
 
-`manifests/argocd-install-<version>.yaml` is vendored, not fetched live —
-`k8s_config`'s `paths` only accepts local files, and pinning avoids a
-runtime dependency on `raw.githubusercontent.com`. To bump the version:
-
-1. `curl -fsS -o manifests/argocd-install-vX.Y.Z.yaml https://raw.githubusercontent.com/argoproj/argo-cd/vX.Y.Z/manifests/install.yaml`
-2. Set `argocd_version`'s default (in `variables.hcl`) or pass it as a caller variable.
+Pass `argocd_version` (any upstream tag) as a caller variable, or change its
+default in `variables.hcl`. `install_argocd` runs `kubectl apply -f` on
+`https://raw.githubusercontent.com/argoproj/argo-cd/<version>/manifests/install.yaml`,
+so nothing is vendored in this repo and no release of this module is needed
+for a bump. The install therefore needs `raw.githubusercontent.com`
+reachable; for an air-gapped host or a mirror, set `argocd_manifest_url`.
 
 If a bump renames or drops one of the Deployments behind `disable_dex`,
 `disable_notifications` or `disable_applicationset`, the `kubectl scale`

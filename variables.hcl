@@ -76,11 +76,21 @@ variable "app_path" {
 }
 
 variable "argocd_version" {
-  default     = "v3.5.1"
+  default     = "v3.5.6"
   description = <<-EOF
-    ArgoCD release to install. Must match a vendored
-    manifests/argocd-install-<version>.yaml in this module -- see
-    "Bumping the ArgoCD version" in README before changing.
+    ArgoCD release to install -- any upstream tag (e.g. "v3.5.6").
+    Its manifests/install.yaml is applied straight from the argo-cd
+    repo; see argocd_manifest_url to use another source.
+  EOF
+}
+
+variable "argocd_manifest_url" {
+  default     = ""
+  description = <<-EOF
+    Install manifest to apply instead of argo-cd's own install.yaml for
+    argocd_version -- e.g. an internal mirror. "" means use upstream. Must
+    still contain argocd-server, argocd-repo-server and
+    argocd-application-controller.
   EOF
 }
 
