@@ -215,6 +215,38 @@ calls in `install_argocd` fail and the install stops. That's deliberate --
 fix the names rather than making those calls non-fatal, or a silently
 skipped component becomes a silently running one.
 
+## Preloading ArgoCD's images (optional)
+
+ArgoCD's pods otherwise pull their images through jumppad's image-cache
+proxy, which can be slow or fail outright (we saw Redis stuck in
+`ImagePullBackOff` on the ECR CDN). This module can't preload them itself:
+jumppad only accepts `copy_image` on the `k8s_cluster` resource, which the
+caller owns. Add it there:
+
+```hcl
+resource "k8s_cluster" "dev" {
+  # ...
+
+  copy_image {
+    name = "quay.io/argoproj/argocd:${variable.argocd_version}"
+  }
+
+  copy_image {
+    name = "public.ecr.aws/docker/library/redis:8.2.3-alpine"
+  }
+}
+```
+
+- The Redis tag must match the one in that ArgoCD release's
+  `manifests/install.yaml` (`8.2.3-alpine` in both v3.5.1 and v3.5.6). Check it
+  when changing `argocd_version`. A mismatch only loses the preload; the pod
+  then pulls normally.
+- The preload only takes effect when k3s runs the `overlayfs` snapshotter.
+  jumppad up to 0.28.1 falls back to `native` when Docker uses the
+  containerd image store (Docker Desktop's default on new installs), and
+  then pods pull the images again anyway
+  ([jumppad-labs/jumppad#385](https://github.com/jumppad-labs/jumppad/pull/385)).
+
 ## Design notes
 
 Most of this module is declarative (`template` + `k8s_config` resources).
