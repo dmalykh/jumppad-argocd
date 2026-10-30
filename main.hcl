@@ -16,18 +16,13 @@ resource "k8s_config" "namespaces" {
   wait_until_ready = false
 }
 
-# Verbatim copy (no `variables`) -- just to get an absolute path exec can read.
-resource "template" "argocd_install_manifest" {
-  source      = file("manifests/argocd-install-${variable.argocd_version}.yaml")
-  destination = ".generated/argocd-install-${variable.argocd_version}.yaml"
-}
-
 resource "exec" "install_argocd" {
   script = <<-EOT
     #!/usr/bin/env bash
     set -euo pipefail
-    : "$${ARGOCD_MANIFEST:?}" "$${KUBECONFIG:?}"
-    kubectl apply --server-side --force-conflicts -n argocd -f "$ARGOCD_MANIFEST"
+    : "$${ARGOCD_VERSION:?}" "$${KUBECONFIG:?}"
+    manifest="$${ARGOCD_MANIFEST_URL:-https://raw.githubusercontent.com/argoproj/argo-cd/$ARGOCD_VERSION/manifests/install.yaml}"
+    kubectl apply --server-side --force-conflicts -n argocd -f "$manifest"
 
     # Scaled, not deleted -- inert Service/RBAC survives an argocd_version bump.
     # Both directions: the manifest declares no spec.replicas, so apply never
@@ -47,8 +42,9 @@ resource "exec" "install_argocd" {
   EOT
 
   environment = {
-    KUBECONFIG      = variable.k8s_cluster.kube_config.path
-    ARGOCD_MANIFEST = resource.template.argocd_install_manifest.destination
+    KUBECONFIG          = variable.k8s_cluster.kube_config.path
+    ARGOCD_VERSION      = variable.argocd_version
+    ARGOCD_MANIFEST_URL = variable.argocd_manifest_url
 
     DISABLE_DEX            = variable.disable_dex
     DISABLE_NOTIFICATIONS  = variable.disable_notifications
